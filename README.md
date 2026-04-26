@@ -4,7 +4,7 @@ Reusable systems-programming components built from scratch -- storage engines, s
 
 ## Modules
 
-- **foundry-storage** -- durable storage primitives: write-ahead logs, KV stores, LSM trees
+- **foundry-storage** -- storage engine primitives: write-ahead logs, LSM trees, B-trees
 - **foundry-streaming** -- stream processing internals: checkpointing, windowing, state management
 
 ## Build

@@ -9,6 +9,7 @@
 
     <modules>
         <module>foundry-storage</module>
+        <module>foundry-kvstore</module>
         <module>foundry-streaming</module>
     </modules>
 
