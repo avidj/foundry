@@ -13,9 +13,7 @@
     </modules>
 
     <properties>
-        <compileSource>21</compileSource>
-        <compileTarget>${compileSource}</compileTarget>
-        <targetJdk>21</targetJdk>
+        <maven.compiler.release>21</maven.compiler.release>
         <auto-value.version>1.11.0</auto-value.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
@@ -70,8 +68,8 @@
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>
-                <artifactId>mockito-all</artifactId>
-                <version>1.9.0</version>
+                <artifactId>mockito-core</artifactId>
+                <version>5.12.0</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -85,11 +83,11 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.14.1</version>
                     <configuration>
-                        <source>${compileSource}</source>
-                        <target>${compileTarget}</target>
                         <showWarnings>true</showWarnings>
                         <showDeprecation>true</showDeprecation>
-                        <compilerArgument>-Xlint:all</compilerArgument>
+                        <compilerArgs>
+                            <arg>-Xlint:all</arg>
+                        </compilerArgs>
                         <annotationProcessorPaths>
                             <path>
                                 <groupId>com.google.auto.value</groupId>
@@ -185,9 +183,23 @@
                 </plugin>
 
                 <plugin>
-                    <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>cobertura-maven-plugin</artifactId>
-                    <version>2.7</version>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>0.8.12</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>test</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                 </plugin>
 
                 <plugin>
@@ -234,7 +246,7 @@
                     <configuration>
                         <linkXref>true</linkXref>
                         <minimumTokens>100</minimumTokens>
-                        <targetJdk>${compileSource}</targetJdk>
+                        <targetJdk>${maven.compiler.release}</targetJdk>
                     </configuration>
                 </plugin>
 
