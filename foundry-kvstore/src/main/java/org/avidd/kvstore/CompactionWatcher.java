@@ -25,8 +25,16 @@ public class CompactionWatcher implements AutoCloseable {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     executor.shutdown();
+    try {
+      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+        executor.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
   }
 
   public CompactionWatcher start() {

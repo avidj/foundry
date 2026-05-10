@@ -160,7 +160,7 @@ public class StringWriteAheadLog implements WriteAheadLog {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() throws IOException {
     synchronized ( mutex ) {
       if ( !recovered ) {
         return;
