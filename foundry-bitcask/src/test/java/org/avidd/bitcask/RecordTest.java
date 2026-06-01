@@ -24,7 +24,7 @@ public class RecordTest {
       is(not(equalTo(new Record(1L, "key0".getBytes(), "value1".getBytes(), false)))));
 
     assertThat(new Record(1L, "key0".getBytes(), "value0".getBytes(), false),
-      is(not(equalTo(new Record(1L, "key0".getBytes(), "value0".getBytes(), true)))));
+      is(not(equalTo(new Record(1L, "key0".getBytes(), new byte[0], true)))));
   }
 
   @Test

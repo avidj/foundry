@@ -23,4 +23,17 @@ public class RecordCodecTest {
     // expect
     assertThat(original, is(equalTo(decoded)));
   }
+
+  @Test
+  public void testRoundTripTombstone() throws IOException {
+    // given
+    Record original = new Record(42L, "key".getBytes(), new byte[0], true);
+
+    // with
+    byte[] encoded = codec.encode(original);
+    Record decoded = codec.decode(encoded);
+
+    // expect
+    assertThat(original, is(equalTo(decoded)));
+  }
 }

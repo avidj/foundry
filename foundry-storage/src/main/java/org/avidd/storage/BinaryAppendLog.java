@@ -153,7 +153,7 @@ public final class BinaryAppendLog<T> implements Closeable {
 
     private Frame<T> readNext() throws IOException {
       synchronized ( mutex ) {
-        final long offset = read;
+        final long offset = read + HEADER_LENGTH;
         if ( rc.read(header) < HEADER_LENGTH ) {
           throw new IOException(String.format("corrupt frame at offset %d", offset));
         }

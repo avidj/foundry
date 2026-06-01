@@ -95,6 +95,32 @@ public class BinaryAppendLogTest {
     }
   }
 
+  @Test
+  public void testFrameOffsetPointsToPayload() throws Exception {
+    try (BinaryAppendLog<String> bal = new BinaryAppendLog<>(path, codec)) {
+      bal.append("Hello");
+      bal.append("World");
+    }
+
+    try (BinaryAppendLog<String> bal = new BinaryAppendLog<>(path, codec);
+         BinaryAppendLog.CloseableIterator<Frame<String>> iter = bal.iterator()) {
+
+      while (iter.hasNext()) {
+        Frame<String> frame = iter.next();
+        byte[] expected = codec.encode(frame.payload());
+
+        byte[] actual = new byte[expected.length];
+        try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r")) {
+          raf.seek(frame.offset());
+          raf.readFully(actual);
+        }
+
+        assertThat(actual, is(equalTo(expected)));
+      }
+    }
+  }
+
+
   private static class StringCodec implements PayloadCodec<String> {
     private static final Charset CHARSET = Charset.forName("UTF-8");
 
