@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
 
@@ -68,13 +69,30 @@ public class BinaryAppendLogTest {
   @Test
   public void testRecover() throws IOException {
     try ( BinaryAppendLog<String> bal = new BinaryAppendLog<>(path, codec) ) {
-      // long append(T payload) throws IOException
-      // void fsync()
-      // long size()
+      bal.append("Hello");
+      bal.append("World");
+      bal.append("Goodbye");
+      bal.append("Universe");
+      bal.fsync();
     }
-    // long append(T payload) throws IOException
-    // void fsync()
-    // long size()
+    corruptFile(path, "HelloWorld".getBytes().length + 2 * 8 + 3);
+
+    try ( BinaryAppendLog<String> bal = new BinaryAppendLog<>(path, codec) ) {
+      try ( BinaryAppendLog.CloseableIterator<Frame<String>> iter = bal.iterator() ) {
+        StringBuilder s = new StringBuilder();
+        while ( iter.hasNext() ) {
+          s.append(iter.next().payload());
+        }
+        assertThat(s.toString(), is(equalTo("HelloWorld")));
+      }
+    }
+  }
+
+  private void corruptFile(Path path, int at) throws IOException {
+    try ( RandomAccessFile raf = new RandomAccessFile(path.toFile(), "rw") ) {
+      raf.seek(at);
+      raf.write(new byte[]{0x00, 0x00, 0x00, 0x00});
+    }
   }
 
   private static class StringCodec implements PayloadCodec<String> {

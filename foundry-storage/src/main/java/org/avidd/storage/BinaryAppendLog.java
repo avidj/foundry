@@ -3,7 +3,6 @@ package org.avidd.storage;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
