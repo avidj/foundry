@@ -120,7 +120,6 @@ public class BinaryAppendLogTest {
     }
   }
 
-
   private static class StringCodec implements PayloadCodec<String> {
     private static final Charset CHARSET = Charset.forName("UTF-8");
 
