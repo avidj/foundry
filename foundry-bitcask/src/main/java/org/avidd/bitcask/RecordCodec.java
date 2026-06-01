@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public class RecordCodec implements PayloadCodec<Record> {
-  private static final byte TOMBSTONE = -1;
+  private static final int TOMBSTONE = -1;
 
   @Override
   public byte[] encode(Record record) throws IOException {
@@ -32,46 +32,20 @@ public class RecordCodec implements PayloadCodec<Record> {
   @Override
   public Record decode(byte[] bytes) throws IOException {
     assert bytes.length >= Record.HEADER_BYTES: "invalid record bytes";
+    ByteBuffer buf = ByteBuffer.wrap(bytes);
 
-    int offset = 0;
-    int len = Long.BYTES;
-    ByteBuffer buf = ByteBuffer.allocate(len);
-    buf.put(bytes, offset, len);
-    buf.rewind();
-    offset += len;
+    // read header
     long ts = buf.getLong();
-
-    len = Integer.BYTES;
-    buf = ByteBuffer.allocate(len);
-    buf.put(bytes, offset, len);
-    buf.rewind();
-    offset += len;
     int keyLen = buf.getInt();
-
-    len = Integer.BYTES;
-    buf = ByteBuffer.allocate(len);
-    buf.put(bytes, offset, len);
-    buf.rewind();
-    offset += len;
     int valLen = buf.getInt();
 
-    boolean isTombstone = valLen == (int)TOMBSTONE;
+    // read payload
+    byte[] key = new byte[keyLen];
+    buf.get(key);
+    boolean isTombstone = valLen == TOMBSTONE;
+    byte[] value = new byte[isTombstone ? 0 : valLen];
+    buf.get(value);
 
-    len = keyLen;
-    buf = ByteBuffer.allocate(len);
-    buf.put(bytes, offset, len);
-    buf.rewind();
-    offset += len;
-    byte[] key = buf.array();
-
-    byte[] value = new byte[0];
-    if (!isTombstone) {
-      len = valLen;
-      buf = ByteBuffer.allocate(len);
-      buf.put(bytes, offset, len);
-      buf.rewind();
-      value = buf.array();
-    }
     return new Record(ts, key, value, isTombstone);
   }
 }
