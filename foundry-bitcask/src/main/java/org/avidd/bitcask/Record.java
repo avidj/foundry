@@ -2,7 +2,6 @@ package org.avidd.bitcask;
 
 import org.avidd.storage.PayloadCodec;
 
-import java.lang.reflect.Array;
 import java.util.Arrays;
 
 public record Record(long timestamp, byte[] key, byte[] value, boolean tombstone) {
