@@ -11,6 +11,7 @@
         <module>foundry-storage</module>
         <module>foundry-kvstore</module>
         <module>foundry-bitcask</module>
+        <module>foundry-lsm</module>
         <module>foundry-streaming</module>
     </modules>
 
