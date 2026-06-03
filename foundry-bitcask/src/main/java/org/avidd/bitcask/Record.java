@@ -1,13 +1,10 @@
 package org.avidd.bitcask;
 
-import org.avidd.storage.PayloadCodec;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public record Record(long timestamp, byte[] key, byte[] value, boolean tombstone) {
   public static final int HEADER_BYTES = 16;
-  public static final PayloadCodec<Record> CODEC = new RecordCodec();
 
   public Record(long timestamp, byte[] key, byte[] value, boolean tombstone) {
     assert !tombstone || value.length == 0;
@@ -19,12 +16,11 @@ public record Record(long timestamp, byte[] key, byte[] value, boolean tombstone
 
   @Override
   public String toString() {
-    return new StringBuilder("Record[")
-      .append("timestamp=").append(timestamp())
-      .append(", key=").append(new String(key(), StandardCharsets.UTF_8))
-      .append(", value=").append(new String(value(), StandardCharsets.UTF_8))
-      .append(", tombstone=").append(tombstone())
-      .toString();
+    return "Record[" +
+      "timestamp=" + timestamp() +
+      ", key=" + new String(key(), StandardCharsets.UTF_8) +
+      ", value=" + new String(value(), StandardCharsets.UTF_8) +
+      ", tombstone=" + tombstone();
   }
 
   @Override
