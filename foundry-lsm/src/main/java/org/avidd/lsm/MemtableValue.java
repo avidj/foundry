@@ -6,9 +6,7 @@ package org.avidd.lsm;
  * @param tombstone true, if and only if deleted (should be singleton)
  */
 public record MemtableValue(String value, boolean tombstone) {
-  public MemtableValue(String value, boolean tombstone) {
+  public MemtableValue {
     assert !tombstone || value == null;
-    this.value = value;
-    this.tombstone = tombstone;
   }
 }

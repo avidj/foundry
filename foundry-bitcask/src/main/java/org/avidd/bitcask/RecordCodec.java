@@ -8,11 +8,15 @@ import java.nio.ByteBuffer;
 public class RecordCodec implements PayloadCodec<Record> {
   private static final int TOMBSTONE = -1;
 
-  @Override
-  public byte[] encode(Record record) throws IOException {
-    final int len = Record.HEADER_BYTES +
+  public int sizeBytes(Record record) {
+    return Record.HEADER_BYTES +
       record.key().length +
       (record.tombstone() ? 0 : record.value().length);
+  }
+
+  @Override
+  public byte[] encode(Record record) throws IOException {
+    final int len = sizeBytes(record);
     ByteBuffer buf = ByteBuffer.allocate(len);
 
     // write header

@@ -21,4 +21,6 @@ public interface PayloadCodec<T> {
      * @throws IOException if anything goes wrong during decoding
      */
     T decode(byte[] bytes) throws IOException;
+
+    int sizeBytes(T value);
 }

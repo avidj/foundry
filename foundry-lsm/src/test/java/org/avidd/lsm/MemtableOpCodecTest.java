@@ -15,7 +15,7 @@ public class MemtableOpCodecTest {
 
   @Test
   public void testRoundTripValue() throws IOException {
-    PayloadCodec<MemtableOp> codec = new MemtableOpCodec();
+    PayloadCodec<MemtableOp> codec = MemtableOpCodec.getInstance();
     MemtableOp op = new MemtableOp(
       OpType.PUT,
       "key".getBytes(StandardCharsets.UTF_8),
@@ -26,7 +26,7 @@ public class MemtableOpCodecTest {
 
   @Test
   public void testRoundTripTombstone() throws IOException {
-    PayloadCodec<MemtableOp> codec = new MemtableOpCodec();
+    PayloadCodec<MemtableOp> codec = MemtableOpCodec.getInstance();
     MemtableOp op = new MemtableOp(
       OpType.DELETE,
       "key".getBytes(StandardCharsets.UTF_8),

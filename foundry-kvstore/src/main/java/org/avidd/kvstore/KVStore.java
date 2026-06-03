@@ -8,10 +8,10 @@ import java.io.IOException;
  */
 public interface KVStore {
 
-  public void put(String key, String value) throws IOException ;
+  public void put(String key, String value) throws IOException, InterruptedException ;
 
-  public String get(String key);
+  public String get(String key) throws IOException;
 
-  public void delete(String key) throws IOException;
+  public void delete(String key) throws IOException, InterruptedException;
 
 }

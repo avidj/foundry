@@ -34,7 +34,7 @@ public class BitcaskKVStoreTest {
   }
 
   @Test
-  public void testPutGet() throws IOException {
+  public void testPutGet() throws IOException, InterruptedException {
     // given
     assertThat(LOG_DIR.toFile().exists(), is(false));
     KVStore kvs = new BitcaskKVStore(LOG_DIR);
@@ -57,7 +57,7 @@ public class BitcaskKVStoreTest {
   }
 
   @Test
-  public void testRecover() throws IOException {
+  public void testRecover() throws IOException, InterruptedException {
     // given
     assertThat(LOG_DIR.toFile().exists(), is(false));
     KVStore kvs = new BitcaskKVStore(LOG_DIR);

@@ -10,6 +10,9 @@ import java.util.Arrays;
  * @param value value bytes
  */
 public record MemtableOp(OpType opType, byte[] key, byte[] value) {
+  public void replay(Memtable memtable) {
+    this.opType.replay(this, memtable);
+  }
 
   @Override
   public int hashCode() {
@@ -31,10 +34,9 @@ public record MemtableOp(OpType opType, byte[] key, byte[] value) {
 
   @Override
   public String toString() {
-    return new StringBuilder("Record[")
-      .append("opType=").append(opType().name())
-      .append(", key=").append(new String(key(), StandardCharsets.UTF_8))
-      .append(", value=").append(new String(value(), StandardCharsets.UTF_8))
-      .toString();
+    return "Record[" +
+      "opType=" + opType().name() +
+      ", key=" + new String(key(), StandardCharsets.UTF_8) +
+      ", value=" + new String(value(), StandardCharsets.UTF_8);
   }
 }

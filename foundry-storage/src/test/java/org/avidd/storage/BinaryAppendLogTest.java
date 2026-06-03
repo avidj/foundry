@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
 public class BinaryAppendLogTest {
@@ -121,7 +122,12 @@ public class BinaryAppendLogTest {
   }
 
   private static class StringCodec implements PayloadCodec<String> {
-    private static final Charset CHARSET = Charset.forName("UTF-8");
+    private static final Charset CHARSET = StandardCharsets.UTF_8;
+
+    @Override
+    public int sizeBytes(String value) {
+      return value.getBytes(CHARSET).length;
+    }
 
     @Override
     public byte[] encode(String value) throws IOException {

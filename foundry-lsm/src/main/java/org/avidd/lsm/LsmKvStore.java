@@ -1,49 +1,167 @@
 package org.avidd.lsm;
 
 import org.avidd.kvstore.KVStore;
-import org.avidd.storage.BinaryAppendLog;
 
+import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-public class LsmKvStore implements KVStore {
-  private final Path folder;
-  private final List<SSTable> ssTables;
+public class LsmKvStore implements KVStore, Closeable {
+  private static final long ROTATION_THRESHOLD_BYTES = 64 * 1024 * 1024;
+  private static final String SSTABLES = "sstables";
+  private final Path memtableFolder;
+  private final List<SSTable> sstables;
+  private final Object mutex = new Object();
   private int epoch;
-  private Memtable memtable;
-  private Memtable flushingMemtable;
+  private volatile Memtable memtable;
+  private volatile Memtable flushingMemtable;
+  private volatile boolean closing;
 
-  private LsmKvStore(Path folder, List<SSTable> ssTables, int epoch) throws IOException {
-    this.folder = folder;
-    this.ssTables = ssTables;
+  private LsmKvStore(Path folder, List<SSTable> sstables, int epoch) throws IOException {
+    sstables.sort(Comparator.comparingInt(s -> s.epoch));
+    this.memtableFolder = folder;
+    this.sstables = sstables;
     this.epoch = epoch;
     this.memtable = Memtable.memtable(folder, epoch);
+    // TODO: trigger periodic compaction
   }
 
-  private static LsmKvStore lsmKvStore(Path folder) throws IOException {
-    final int epoch = -1;
-    final List<SSTable> ssTables = new ArrayList<>();
-    return new LsmKvStore(folder, ssTables, epoch);
+  private static Path sstableFolder(Path folder) {
+    return folder.resolve(SSTABLES);
   }
 
-  private void rotate() {
-    throw new UnsupportedOperationException();
+  private static int epoch(File f) {
+    assert f.getName().endsWith(SSTable.FILE_EXT);
+    return Integer.parseInt(f.getName().substring(0, f.getName().indexOf('.')));
+  }
+
+  /**
+   * Restores an LSM key-value store from the given folder
+   * @param folder the root folder to use for recovery and storage
+   * @return the restored key-value store, or a fresh one
+   * @throws IOException if an error occurs during recovery
+   */
+  static LsmKvStore lsmKvStore(Path folder) throws IOException {
+    // recover sstables
+    final List<SSTable> sstables = Collections.synchronizedList(new ArrayList<>());
+    File sstableFolder = sstableFolder(folder).toFile();
+    if ( sstableFolder.exists() ) {
+      assert sstableFolder.isDirectory();
+      File[] files = sstableFolder(folder).toFile().listFiles();
+      assert files != null;
+      List<File> sstableFiles = Arrays.stream(files)
+        .filter(f -> f.getName().endsWith(SSTable.FILE_EXT))
+        .sorted(Comparator.comparingInt(LsmKvStore::epoch))
+        .toList();
+      for ( File sstFile : sstableFiles ) {
+        SSTable sst = SSTableIO.sstable(epoch(sstFile), sstFile.toPath());
+        sstables.add(sst);
+      }
+    }
+
+    // determine epoch, recover binary log if present
+    File[] walFiles = folder.toFile().listFiles(f -> f.getName().endsWith(Memtable.BAL_FILE_EXT));
+    int walEpoch = 0;
+    if ( walFiles != null && walFiles.length > 0 ) {
+      walEpoch = Arrays.stream(walFiles)
+        .mapToInt(f -> Integer.parseInt(f.getName().replace(Memtable.BAL_FILE_EXT, "")))
+        .max()
+        .getAsInt();
+    }
+    int epoch = sstables.isEmpty() ? 0 : sstables.getLast().epoch + 1;
+    epoch = Math.max(walEpoch, epoch);
+
+    return new LsmKvStore(folder, sstables, epoch);
   }
 
   @Override
-  public void put(String key, String value) throws IOException {
+  public void close() throws IOException {
+    synchronized ( mutex ) {
+      if ( closing ) { return; }
+      closing = true;
+    }
+    try {
+      if ( memtable.getSizeBytes() > 0 ) { flush(); }
+    } catch ( InterruptedException e ) {
+      throw new IOException("interrupted while closing", e);
+    }
+  }
 
+  void flush() throws IOException, InterruptedException {
+    doFlush(false);
+  }
+
+  private void rotate() throws IOException, InterruptedException {
+    if ( closing ) { throw new IllegalStateException("kv store is closed"); }
+    doFlush(true);
+  }
+
+  private void doFlush(boolean checkSize) throws IOException, InterruptedException {
+    synchronized ( mutex ) {
+      // wait for current write to finish
+      while ( flushingMemtable != null ) { mutex.wait(); }
+      if ( checkSize && memtable.getSizeBytes() <= ROTATION_THRESHOLD_BYTES ) { return; }
+      // atomic swap
+      flushingMemtable = memtable;
+      memtable = Memtable.memtable(memtableFolder, ++epoch);
+    }
+    if ( flushingMemtable == null ) { return; }
+    SSTable sstable = flushingMemtable.flush(sstableFolder(this.memtableFolder));
+    this.sstables.add(sstable);
+
+    // wake up waiters
+    synchronized ( mutex ) {
+      flushingMemtable = null;
+      mutex.notifyAll();
+    }
   }
 
   @Override
-  public String get(String key) {
-    return "";
+  public void put(String key, String value) throws IOException, InterruptedException {
+    if ( closing ) { throw new IllegalStateException("kv store is closed"); }
+    int size = memtable.put(key, value);
+    if ( size > ROTATION_THRESHOLD_BYTES ) {
+      rotate();
+    }
   }
 
   @Override
-  public void delete(String key) throws IOException {
+  public void delete(String key) throws IOException, InterruptedException {
+    if ( closing ) { throw new IllegalStateException("kv store is closed"); }
+    int size = memtable.delete(key);
+    if ( size > ROTATION_THRESHOLD_BYTES ) {
+      rotate();
+    }
+  }
 
+  @Override
+  public String get(String key) throws IOException {
+    if ( closing ) { throw new IllegalStateException("kv store is closed"); }
+    int newestSST;
+    synchronized ( mutex ) {
+      // 1. memtable
+      MemtableValue value = memtable.get(key);
+      if ( value != null ) {
+        return value.value();
+      }
+      // 2. flushingMemtable
+      value = flushingMemtable != null ? flushingMemtable.get(key) : null;
+      if ( value != null ) {
+        return value.value();
+      }
+      newestSST = sstables.size() - 1;
+    }
+    // 3. sstables from newest to oldest
+    for ( int i = newestSST; i >= 0; i-- ) {
+      SSTable current = sstables.get(i);
+      if ( !current.mayHave(key) ) { continue; }
+      MemtableValue value = current.get(key);
+      if ( value != null ) {
+        return value.value();
+      }
+    }
+    return null;
   }
 }

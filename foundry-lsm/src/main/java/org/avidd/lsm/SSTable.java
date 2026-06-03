@@ -1,41 +1,69 @@
 package org.avidd.lsm;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public class SSTable {
-  private final BloomFilter bloom;
-  private final ArrayList<IndexEntry> sparseIndex;
+  public static final double FALSE_POSITIVE_RATE = 0.01;
+  public static final int SIZE = 10000;
+  public static final String FILE_EXT = ".sstable";
+  public final int epoch;
   private final Path path;
+  private final BloomFilter bloom;
+  private final List<IndexEntry> sparseIndex;
+  private final long indexOffset;
 
-  static record IndexEntry(String key, long offset) implements Comparable<IndexEntry> {
+  record IndexEntry(String key, long offset) implements Comparable<IndexEntry> {
     @Override
     public int compareTo(IndexEntry o) { return this.key.compareTo(o.key); }
   }
 
   static String toFileName(int epoch) {
-    return new StringBuilder(Integer.toString(epoch)).append(".sstable").toString();
+    return epoch + FILE_EXT;
   }
 
-  SSTable(Path path) throws IOException {
+  SSTable(int epoch, Path path, BloomFilter bloom, List<IndexEntry> sparseIndex, long indexOffset) {
+    this.epoch = epoch;
     this.path = path;
-
-    // recover
-    int size = 100;
-    this.bloom = new BloomFilter(size, 0.01);
-    this.sparseIndex = new ArrayList<>(size);
+    this.bloom = bloom;
+    this.sparseIndex = sparseIndex;
+    this.indexOffset = indexOffset;
   }
 
-  public String get(String key) {
-    if ( !bloom.mayHave(key) ) { return null; }
-    int idx = Collections.binarySearch(sparseIndex, new IndexEntry(key, -1));
-    int floorIdx = ( idx < 0 ) ? -idx -2 : idx;
-    if ( floorIdx < 0 ) { return null; } // cannot be found
-    long offset = sparseIndex.get(floorIdx).offset;
+  boolean mayHave(String key) {
+    return bloom.mayHave(key);
+  }
 
+  MemtableValue get(String key) throws IOException {
+    if ( !mayHave(key) ) {
+      throw new IllegalArgumentException("test with mayHave first");
+    }
+    int idx = Collections.binarySearch(sparseIndex, new IndexEntry(key, -1));
+    int floorIdx = (idx < 0) ? -idx - 2 : idx;
+    if ( floorIdx < 0 ) {
+      return null;
+    } // cannot be found
+    long offset = sparseIndex.get(floorIdx).offset;
+    long endOffset = (floorIdx + 1 < sparseIndex.size())
+      ? sparseIndex.get(floorIdx + 1).offset
+      : indexOffset;
     // random access the sstable file at offset, scan and if key is found return
-    return null;
+    try ( RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r") ) {
+      raf.seek(offset);
+      Map.Entry<String, MemtableValue> entry;
+      while ( (entry = SSTableIO.decode(raf, endOffset)) != null ) {
+        int comp = entry.getKey().compareTo(key);
+        if ( comp == 0 ) {
+          return entry.getValue();
+        } else if ( comp > 0 ) { // passed the potential position
+          return null;
+        }
+      }
+      return null;
+    }
   }
 }

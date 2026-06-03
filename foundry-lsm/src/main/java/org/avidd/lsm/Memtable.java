@@ -1,50 +1,76 @@
 package org.avidd.lsm;
 
 import org.avidd.storage.BinaryAppendLog;
+import org.avidd.storage.Frame;
 import org.avidd.storage.PayloadCodec;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 
 class Memtable {
-  private static final PayloadCodec<MemtableOp> CODEC = new MemtableOpCodec();
+  private static final PayloadCodec<MemtableOp> CODEC = MemtableOpCodec.getInstance();
   static final byte[] DEL_BYTES = new byte[0];
-  private final Path folder;
+  static final String BAL_FILE_EXT = ".bal";
   private final BinaryAppendLog<MemtableOp> bal;
   private final Object mutex = new Object();
   private transient boolean isSealed = false;
-  final Map<String, MemtableValue> map = new TreeMap<>();
+  private transient int sizeBytes = 0;
+  final Map<String, MemtableValue> map = Collections.synchronizedMap(new TreeMap<>());
   final int epoch;
 
-  private Memtable(Path folder, int epoch, BinaryAppendLog<MemtableOp> bal) throws IOException {
-    this.folder = folder;
+  private Memtable(int epoch, BinaryAppendLog<MemtableOp> bal) {
     this.epoch = epoch;
     this.bal = bal;
   }
 
   static Memtable memtable(Path folder, int epoch) throws IOException {
-    Path path = folder.resolve(Integer.toString(epoch) + ".bal");
+    Path path = folder.resolve(epoch + BAL_FILE_EXT);
     BinaryAppendLog<MemtableOp> bal = new BinaryAppendLog<>(path, CODEC);
-    return new Memtable(folder, epoch, bal);
+    bal.recover();
+    Memtable memtable = new Memtable(epoch, bal);
+    try ( BinaryAppendLog.CloseableIterator<Frame<MemtableOp>> ops = bal.iterator() ) {
+      while ( ops.hasNext() ) {
+        MemtableOp op = ops.next().payload();
+        op.replay(memtable);
+        memtable.sizeBytes += CODEC.sizeBytes(op);
+      }
+    }
+    return memtable;
   }
 
-  void flush() throws IOException {
+  SSTable flush(Path sstableFolder) throws IOException {
     if ( this.isSealed ) {
       throw new IllegalStateException("flush already triggered");
     }
     this.isSealed = true;
-    SSTableWriter.write(folder, this);
+    sstableFolder.toFile().mkdirs();
+    SSTable sst = SSTableIO.write(sstableFolder, this);
+    boolean deleted = bal.delete();
+    assert deleted;
+    return sst;
   }
 
-  String get(String key) {
-    MemtableValue val = this.map.get(key);
-    return val != null && !val.tombstone() ? val.value() : null;
+  MemtableValue get(String key) {
+    return this.map.get(key);
   }
 
-  void put(String key, String value) throws IOException {
+  int getSizeBytes() {
+    synchronized ( mutex ) {
+      return this.sizeBytes;
+    }
+  }
+
+  /**
+   * @param key the key to write
+   * @param value the value to write
+   * @return the size of this memtable in bytes after write
+   * @throws IOException if the write fails
+   */
+  int put(String key, String value) throws IOException {
     if ( this.isSealed ) {
       throw new IllegalStateException("flush already triggered");
     }
@@ -53,11 +79,18 @@ class Memtable {
     MemtableOp op = new MemtableOp(OpType.PUT, keyBytes, valBytes);
     synchronized ( mutex ) {
       bal.append(op);
+      sizeBytes += CODEC.sizeBytes(op);
       this.map.put(key, new MemtableValue(value, false));
     }
+    return sizeBytes;
   }
 
-  void delete(String key) throws IOException {
+  /**
+   * @param key the key to delete
+   * @return the size of this memtable in bytes after write
+   * @throws IOException if the write fails
+   */
+  int delete(String key) throws IOException {
     if ( this.isSealed ) {
       throw new IllegalStateException("flush already triggered");
     }
@@ -65,7 +98,9 @@ class Memtable {
     MemtableOp op = new MemtableOp(OpType.DELETE, keyBytes, DEL_BYTES);
     synchronized ( mutex ) {
       bal.append(op);
+      sizeBytes += CODEC.sizeBytes(op);
       this.map.put(key, new MemtableValue(null, true));
     }
+    return sizeBytes;
   }
 }

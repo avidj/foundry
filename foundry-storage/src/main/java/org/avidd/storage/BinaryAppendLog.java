@@ -68,6 +68,10 @@ public final class BinaryAppendLog<T> implements Closeable {
     }
   }
 
+  public boolean delete() {
+    return this.path.toFile().delete();
+  }
+
   public void fsync() throws IOException {
     channel.force(true);
   }
