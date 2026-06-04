@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -133,21 +134,12 @@ class SSTableIO {
     in.readFully(keyBytes);
     String key = new String(keyBytes, StandardCharsets.UTF_8);
     if ( valLen < 0 ) {
-      return new Map.Entry<>() {
-        @Override public String getKey() { return key; }
-        @Override public MemtableValue getValue() { return TOMBSTONE; }
-        @Override public MemtableValue setValue(MemtableValue value) { throw new UnsupportedOperationException(); }
-      };
+      return new AbstractMap.SimpleImmutableEntry<>(key, TOMBSTONE);
     } else {
       byte[] valBytes = new byte[valLen];
       in.readFully(valBytes);
       String val = new String(valBytes, StandardCharsets.UTF_8);
-      MemtableValue mtv = new MemtableValue(val, false);
-      return new Map.Entry<>() {
-        @Override public String getKey() { return key; }
-        @Override public MemtableValue getValue() { return mtv; }
-        @Override public MemtableValue setValue(MemtableValue value) { throw new UnsupportedOperationException(); }
-      };
+      return new AbstractMap.SimpleImmutableEntry<>(key, new MemtableValue(val, false));
     }
   }
 

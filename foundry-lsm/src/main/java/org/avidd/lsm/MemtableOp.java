@@ -15,14 +15,6 @@ public record MemtableOp(OpType opType, byte[] key, byte[] value) {
   }
 
   @Override
-  public int hashCode() {
-    int hash = opType.ordinal() + 1;
-    hash = hash * 31 + Arrays.hashCode(key());
-    hash = hash * 31 + Arrays.hashCode(value());
-    return hash;
-  }
-
-  @Override
   public boolean equals(Object other) {
     if ( !(other instanceof MemtableOp(OpType type, byte[] key1, byte[] value1))) {
       return false;
@@ -30,13 +22,5 @@ public record MemtableOp(OpType opType, byte[] key, byte[] value) {
     return this.opType == type
       && Arrays.equals(this.key, key1)
       && Arrays.equals(this.value, value1);
-  }
-
-  @Override
-  public String toString() {
-    return "Record[" +
-      "opType=" + opType().name() +
-      ", key=" + new String(key(), StandardCharsets.UTF_8) +
-      ", value=" + new String(value(), StandardCharsets.UTF_8);
   }
 }

@@ -375,6 +375,43 @@ class LsmKvStoreTest {
         store.close(); // must not throw
     }
 
+    // ---- recovery after compaction ----
+
+    @Test
+    void recovery_after_compaction(@TempDir Path tempDir) throws Exception {
+        // TC-RECOV-07: close a store whose SSTables were compacted into one, reopen, verify all data
+        try (LsmKvStore store = lsmKvStore(tempDir)) {
+            store.put("a", "va"); store.flush();
+            store.put("b", "vb"); store.flush();
+            store.put("c", "vc"); store.flush();
+            store.put("d", "vd"); store.flush(); // triggers compaction → 1 SSTable
+        }
+        try (LsmKvStore store = lsmKvStore(tempDir)) {
+            assertThat(store.get("a"), is("va"));
+            assertThat(store.get("b"), is("vb"));
+            assertThat(store.get("c"), is("vc"));
+            assertThat(store.get("d"), is("vd"));
+        }
+    }
+
+    // ---- delete-triggered rotation ----
+
+    @Test
+    void delete_triggers_rotation(@TempDir Path tempDir) throws Exception {
+        // TC-FLUSH-06: covers the rotate() call in delete() — genuine coverage gap
+        // 8338 puts of 6-byte key + 488-byte value = 8338 × 503 = 4,194,014 bytes (just below threshold)
+        // One delete with 282-byte key adds 9+282 = 291 bytes → 4,194,305 > threshold → rotation
+        String value = "x".repeat(488);
+        try (LsmKvStore store = lsmKvStore(tempDir)) {
+            for (int i = 0; i < 8_338; i++) {
+                store.put(String.format("a%05d", i), value);
+            }
+            assertThat(countSSTables(tempDir), is(0));
+            store.delete("d".repeat(282));
+            assertThat(countSSTables(tempDir), is(greaterThanOrEqualTo(1)));
+        }
+    }
+
     // ---- helpers ----
 
     private static int countSSTables(Path tempDir) {

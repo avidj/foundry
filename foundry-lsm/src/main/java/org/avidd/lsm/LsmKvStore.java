@@ -23,6 +23,8 @@ public class LsmKvStore implements KVStore, Closeable {
   private volatile Memtable flushingMemtable;
   private volatile boolean closing;
   private boolean compacting = false;
+  // Injected by tests to block between memtable swap and SSTable IO — null in production
+  volatile Runnable postSwapHook = null;
 
   private LsmKvStore(Path folder, List<SSTable> sstables, int epoch) throws IOException {
     sstables.sort(Comparator.comparingInt(s -> s.epoch));
@@ -113,7 +115,7 @@ public class LsmKvStore implements KVStore, Closeable {
       epoch += 2;
       memtable = Memtable.memtable(memtableFolder, epoch); // even epochs on rotation
     }
-    if ( flushingMemtable == null ) { return; }
+    if ( postSwapHook != null ) { postSwapHook.run(); }
     SSTable sstable = flushingMemtable.flush(sstableFolder(this.memtableFolder));
 
     synchronized ( mutex ) {

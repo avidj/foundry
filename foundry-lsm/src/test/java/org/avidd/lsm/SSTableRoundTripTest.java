@@ -88,6 +88,35 @@ class SSTableRoundTripTest {
     }
 
     @Test
+    void get_absent_key_false_positive_returns_null(@TempDir Path tempDir) throws Exception {
+        // TC-SST-06: covers SSTable.get() comp>0 branch and trailing return null
+        // Requires a bloom filter false positive for an absent key that falls between existing keys
+        Map<String, MemtableValue> data = new TreeMap<>();
+        for (int i = 0; i < 100; i++) {
+            data.put(String.format("key-%04d", i), new MemtableValue("val-" + i, false));
+        }
+        SSTableIO.write(tempDir, 0, data);
+        SSTable sst = SSTableIO.sstable(0, tempDir.resolve(SSTable.toFileName(0)));
+
+        // "key-NNNN-MMMM" lexicographically falls between "key-NNNN" and "key-NNNN+1"
+        // With 1% FPR and ~19800 candidates, finding a false positive is virtually certain.
+        String falsePositive = null;
+        outer:
+        for (int i = 0; i < 99 && falsePositive == null; i++) {
+            for (int j = 0; j < 200; j++) {
+                String candidate = String.format("key-%04d-%04d", i, j);
+                if (sst.mayHave(candidate)) {
+                    falsePositive = candidate;
+                    break outer;
+                }
+            }
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(falsePositive != null,
+            "no bloom filter false positive found in 19800 candidates — extremely unlikely");
+        assertThat(sst.get(falsePositive), is(nullValue()));
+    }
+
+    @Test
     void get_without_mayHave_throws(@TempDir Path tempDir) throws Exception {
         // TC-SST-05: EC-SST-05 — SSTable.get() contract: must call mayHave() first
         Map<String, MemtableValue> data = new TreeMap<>();

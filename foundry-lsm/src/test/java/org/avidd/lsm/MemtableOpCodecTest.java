@@ -25,6 +25,15 @@ public class MemtableOpCodecTest {
   }
 
   @Test
+  public void testEqualsReturnsFalseForDifferentType() {
+    MemtableOp op = new MemtableOp(OpType.PUT,
+        "key".getBytes(StandardCharsets.UTF_8),
+        "val".getBytes(StandardCharsets.UTF_8));
+    assertThat(op.equals(null), is(false));
+    assertThat(op.equals("not an op"), is(false));
+  }
+
+  @Test
   public void testRoundTripTombstone() throws IOException {
     PayloadCodec<MemtableOp> codec = MemtableOpCodec.getInstance();
     MemtableOp op = new MemtableOp(
