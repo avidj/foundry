@@ -1,6 +1,8 @@
 package org.avidd.lsm;
 
 import org.avidd.kvstore.KVStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.File;
@@ -9,7 +11,8 @@ import java.nio.file.Path;
 import java.util.*;
 
 public class LsmKvStore implements KVStore, Closeable {
-  private static final long ROTATION_THRESHOLD_BYTES = 64 * 1024 * 1024;
+  private static final Logger logger = LoggerFactory.getLogger(LsmKvStore.class);
+  private static final long ROTATION_THRESHOLD_BYTES = 4 * 1024 * 1024;
   private static final int COMPACTION_THRESHOLD = 4;
   private static final String SSTABLES = "sstables";
   private final Path memtableFolder;
@@ -19,6 +22,7 @@ public class LsmKvStore implements KVStore, Closeable {
   private volatile Memtable memtable;
   private volatile Memtable flushingMemtable;
   private volatile boolean closing;
+  private boolean compacting = false;
 
   private LsmKvStore(Path folder, List<SSTable> sstables, int epoch) throws IOException {
     sstables.sort(Comparator.comparingInt(s -> s.epoch));
@@ -103,6 +107,7 @@ public class LsmKvStore implements KVStore, Closeable {
       // wait for current write to finish
       while ( flushingMemtable != null ) { mutex.wait(); }
       if ( checkSize && memtable.getSizeBytes() <= ROTATION_THRESHOLD_BYTES ) { return; }
+      if ( memtable.getSizeBytes() == 0 ) { return; }
       // atomic swap
       flushingMemtable = memtable;
       epoch += 2;
@@ -110,11 +115,11 @@ public class LsmKvStore implements KVStore, Closeable {
     }
     if ( flushingMemtable == null ) { return; }
     SSTable sstable = flushingMemtable.flush(sstableFolder(this.memtableFolder));
-    this.sstables.add(sstable);
 
-    // wake up waiters
     synchronized ( mutex ) {
+      this.sstables.add(sstable);
       flushingMemtable = null;
+      // wake up waiters
       mutex.notifyAll();
     }
     if ( sstables.size() >= COMPACTION_THRESHOLD ) {
@@ -144,6 +149,7 @@ public class LsmKvStore implements KVStore, Closeable {
   public String get(String key) throws IOException {
     if ( closing ) { throw new IllegalStateException("kv store is closed"); }
     int newestSST;
+    List<SSTable> toGetFrom = null;
     synchronized ( mutex ) {
       // 1. memtable
       MemtableValue value = memtable.get(key);
@@ -155,11 +161,12 @@ public class LsmKvStore implements KVStore, Closeable {
       if ( value != null ) {
         return value.value();
       }
-      newestSST = sstables.size() - 1;
+      toGetFrom = new ArrayList<>(sstables);
+      newestSST = toGetFrom.size() - 1;
     }
     // 3. sstables from newest to oldest
     for ( int i = newestSST; i >= 0; i-- ) {
-      SSTable current = sstables.get(i);
+      SSTable current = toGetFrom.get(i);
       if ( !current.mayHave(key) ) { continue; }
       MemtableValue value = current.get(key);
       if ( value != null ) {
@@ -170,30 +177,54 @@ public class LsmKvStore implements KVStore, Closeable {
   }
 
   private void compact() throws IOException, InterruptedException {
-    // TODO: make async
-    // compute compacted map
-    Map<String, MemtableValue> compacted = new TreeMap<>();
-    // oldest to newest, overwrite in compacted, drop tombstones
-    for ( SSTable sst : sstables ) {
-      try ( SSTableIO.SSTableIterator iterator = sst.iterator() ) {
-        while ( iterator.hasNext() ) {
-          Map.Entry<String, MemtableValue> entry = iterator.next();
-          if ( !entry.getValue().tombstone() ) {
-            compacted.put(entry.getKey(), entry.getValue());
-          } else {
-            compacted.remove(entry.getKey());
+    synchronized ( mutex ) {
+      if ( compacting ) {
+        return;
+      }
+      compacting = true;
+    }
+    try {
+      List<SSTable> toCompact;
+      int compactEpoch;
+      synchronized (  mutex ) {
+        toCompact = new ArrayList<>(sstables);
+        compactEpoch = epoch -1;
+      }
+      // TODO: make async
+      // compute compacted map
+      Map<String, MemtableValue> compacted = new TreeMap<>();
+      // oldest to newest, overwrite in compacted, drop tombstones
+      for ( SSTable sst : toCompact ) {
+        try ( SSTableIO.SSTableIterator iterator = sst.iterator() ) {
+          while ( iterator.hasNext() ) {
+            Map.Entry<String, MemtableValue> entry = iterator.next();
+            if ( !entry.getValue().tombstone() ) {
+              compacted.put(entry.getKey(), entry.getValue());
+            } else {
+              compacted.remove(entry.getKey());
+            }
           }
         }
       }
-    }
 
-    // write the new map into SST epoch = current - 1, preceding the current memtable
-    SSTable compactedSst = SSTableIO.write(sstableFolder(memtableFolder), epoch - 1, compacted);
+      // write the new map into SST epoch = current - 1, preceding the current memtable
+      SSTable compactedSst = SSTableIO.write(sstableFolder(memtableFolder), compactEpoch, compacted);
 
-    // atomically swap SSTs
-    synchronized ( mutex ) {
-      sstables.clear();
-      sstables.add(compactedSst);
+      // atomically swap SSTs
+      synchronized ( mutex ) {
+        sstables.removeAll(toCompact);
+        sstables.add(0, compactedSst); // add as smallest to precede concurrent flushes
+      }
+      for ( SSTable sst : toCompact ) {
+        boolean deleted = sst.path.toFile().delete();
+        if ( !deleted ) {
+          logger.warn("File '" + sst.path + "' was not deleted after compaction, resource leak.");
+        }
+      }
+    } finally {
+      synchronized ( mutex ) {
+        compacting = false;
+      }
     }
   }
 }
