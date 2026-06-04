@@ -1,7 +1,6 @@
 package org.avidd.lsm;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
@@ -12,10 +11,10 @@ public class SSTable {
   public static final int SIZE = 10000;
   public static final String FILE_EXT = ".sstable";
   public final int epoch;
-  private final Path path;
+  final Path path;
   private final BloomFilter bloom;
   private final List<IndexEntry> sparseIndex;
-  private final long indexOffset;
+  final long indexOffset;
 
   record IndexEntry(String key, long offset) implements Comparable<IndexEntry> {
     @Override
@@ -32,6 +31,10 @@ public class SSTable {
     this.bloom = bloom;
     this.sparseIndex = sparseIndex;
     this.indexOffset = indexOffset;
+  }
+
+  SSTableIO.SSTableIterator iterator() throws IOException {
+    return SSTableIO.iterator(this.path, 0L, this.indexOffset);
   }
 
   boolean mayHave(String key) {
@@ -51,11 +54,9 @@ public class SSTable {
     long endOffset = (floorIdx + 1 < sparseIndex.size())
       ? sparseIndex.get(floorIdx + 1).offset
       : indexOffset;
-    // random access the sstable file at offset, scan and if key is found return
-    try ( RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r") ) {
-      raf.seek(offset);
-      Map.Entry<String, MemtableValue> entry;
-      while ( (entry = SSTableIO.decode(raf, endOffset)) != null ) {
+    try ( SSTableIO.SSTableIterator iterator = SSTableIO.iterator(path, offset, endOffset) ) {
+      while ( iterator.hasNext() ) {
+        Map.Entry<String, MemtableValue> entry = iterator.next();
         int comp = entry.getKey().compareTo(key);
         if ( comp == 0 ) {
           return entry.getValue();
@@ -63,7 +64,7 @@ public class SSTable {
           return null;
         }
       }
-      return null;
     }
+    return null;
   }
 }

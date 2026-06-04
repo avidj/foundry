@@ -31,7 +31,6 @@ public class MemtableOpCodecTest {
       OpType.DELETE,
       "key".getBytes(StandardCharsets.UTF_8),
       DEL_BYTES);
-
     assertThat(codec.decode(codec.encode(op)), is(equalTo(op)));
   }
 }

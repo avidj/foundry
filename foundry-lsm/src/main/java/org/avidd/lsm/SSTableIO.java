@@ -1,9 +1,6 @@
 package org.avidd.lsm;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -15,11 +12,20 @@ import java.util.Map;
 import static org.avidd.lsm.Memtable.DEL_BYTES;
 
 class SSTableIO {
+  private static final MemtableValue TOMBSTONE = new MemtableValue(null, true);
   static final int FOOTER_BYTES = 24;
   static final int SPARSE_INDEX_INTERVAL = 128;
 
+  static SSTableIterator iterator(Path path, long offset, long endOffset) throws IOException {
+    return new SSTableIterator(path, offset, endOffset);
+  }
+
   static SSTable write(Path folder, Memtable memtable) throws IOException {
-    Path path = folder.resolve(SSTable.toFileName(memtable.epoch));
+    return write(folder, memtable.epoch, memtable.map);
+  }
+
+  static SSTable write(Path folder, int epoch, Map<String, MemtableValue> memtable) throws IOException {
+    Path path = folder.resolve(SSTable.toFileName(epoch));
     File file = path.toFile();
     boolean created = file.createNewFile();
     assert created : "file exists already";
@@ -30,11 +36,11 @@ class SSTableIO {
       long offset = 0;
       // every 128th key -> data offset
       List<SSTable.IndexEntry> sparseIndex = new ArrayList<>();
-      int expectedInsertions = Math.max(1, memtable.map.size());
+      int expectedInsertions = Math.max(1, memtable.size());
       BloomFilter bloomFilter = new BloomFilter(expectedInsertions, SSTable.FALSE_POSITIVE_RATE);
       // data [key_size(4), value_size[4], key bytes, value bytes]
       // value_size = -1 -> tombstone
-      for ( Map.Entry<String, MemtableValue> entry : memtable.map.entrySet() ) {
+      for ( Map.Entry<String, MemtableValue> entry : memtable.entrySet() ) {
         ByteBuffer buf = encode(entry);
         int written = channel.write(buf);
         assert written == buf.capacity();
@@ -50,7 +56,7 @@ class SSTableIO {
       writeFooter(channel, indexOffset, bloomOffset, numRecords);
       channel.force(true);
 
-      return new SSTable(memtable.epoch, path, bloomFilter, sparseIndex, indexOffset);
+      return new SSTable(epoch, path, bloomFilter, sparseIndex, indexOffset);
     }
   }
 
@@ -114,8 +120,6 @@ class SSTableIO {
     return buf;
   }
 
-  private static final MemtableValue TOMBSTONE = new MemtableValue(null, true);
-
   static Map.Entry<String, MemtableValue> decode(RandomAccessFile in, long end) throws IOException {
     if ( in.getFilePointer() >= end ) {
       return null;
@@ -147,6 +151,13 @@ class SSTableIO {
     }
   }
 
+  /**
+   * Reads an sstable at the given path with the given epoch
+   * @param epoch the epoch of the sst
+   * @param path the path to the file
+   * @return the parsed SSTable
+   * @throws IOException if reading failed
+   */
   static SSTable sstable(int epoch, Path path) throws IOException {
     try ( RandomAccessFile file = new RandomAccessFile(path.toFile(), "r") ) {
       FileChannel c = file.getChannel();
@@ -166,6 +177,14 @@ class SSTableIO {
     }
   }
 
+  /**
+   * Read bloom filter of given length starting at offset in file.
+   * @param file the file to read from
+   * @param offset the offset where the bloom filter starts
+   * @param length the length of the bloom filter in bytes
+   * @return the parsed bloom filter
+   * @throws IOException if reading fails
+   */
   private static BloomFilter readBloomFilter(RandomAccessFile file, long offset, long length) throws IOException {
     file.seek(offset);
     byte[] intBuf = new byte[4];
@@ -197,5 +216,36 @@ class SSTableIO {
       sparseIndex.add(new SSTable.IndexEntry(key, keyOffset));
     }
     return sparseIndex;
+  }
+
+  static class SSTableIterator implements Closeable {
+    private final RandomAccessFile raf;
+    private final long endOffset;
+    private Map.Entry<String, MemtableValue> next;
+
+    private SSTableIterator(Path path, long offset, long endOffset) throws IOException {
+      assert offset >= 0;
+      assert ( endOffset > offset );
+      raf = new RandomAccessFile(path.toFile(), "r");
+      this.endOffset = endOffset;
+      raf.seek(offset);
+      next = SSTableIO.decode(raf, this.endOffset);
+    }
+
+    @Override
+    public void close() throws IOException {
+      raf.close();
+    }
+
+    public boolean hasNext() {
+      return next != null;
+    }
+
+    public Map.Entry<String, MemtableValue> next() throws IOException {
+      if (!hasNext()) { throw new IllegalStateException(); }
+      Map.Entry<String, MemtableValue> entry = next;
+      next = SSTableIO.decode(raf, endOffset);
+      return entry;
+    }
   }
 }
