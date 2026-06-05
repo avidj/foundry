@@ -38,7 +38,7 @@ flowchart TD
 | **GitHub Actions** | Builds, tests, packages, and deploys on every push |
 | **GHCR** | Stores Docker images tagged by git sha and `latest` |
 | **Fly.io** | Runs the container; terminates TLS; auto-starts on request |
-| **Persistent volume** | 1 GB Fly volume mounted at `/data`; survives deploys |
+| **Persistent volume** | 1 GB Fly volume mounted at `/data`; survives deploys and container deletion |
 
 ## API
 
@@ -52,20 +52,33 @@ All endpoints except `/v1/health` require `Authorization: Bearer <API_KEY>`.
 | `DELETE` | `/v1/keys/{key}` | Delete a key |
 | `POST` | `/v1/compact` | Trigger log compaction |
 
+## Data Persistence
+
+The `.bal` and `.bitcask` files are written to `/data` inside the container, which is backed
+by a Fly.io persistent volume — a separate disk managed independently of the container.
+On each deploy, the new container gets the same volume re-attached, so data survives across
+deployments and container restarts. The volume is only destroyed explicitly with `flyctl volumes destroy`.
+
+```bash
+# Inspect the volume
+flyctl volumes list --app foundry-server
+```
+
 ## Verification
 
 ```bash
 # Health check (no auth)
 curl https://foundry-server.fly.dev/v1/health
 
-# Write a value
+# Write a value (use $'...' for ANSI-C quoting to embed a real newline)
 curl -X PUT https://foundry-server.fly.dev/v1/keys/hello \
   -H "Authorization: Bearer $API_KEY" \
-  -d "world"
+  --data-binary $'world\n'
 
-# Read it back
+# Read it back (-w "\n" adds a newline after the response for readability)
 curl https://foundry-server.fly.dev/v1/keys/hello \
-  -H "Authorization: Bearer $API_KEY"
+  -H "Authorization: Bearer $API_KEY" \
+  -w "\n"
 
 # Delete it
 curl -X DELETE https://foundry-server.fly.dev/v1/keys/hello \
