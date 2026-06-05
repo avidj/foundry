@@ -71,4 +71,9 @@ public class SingleNodeKVStore implements KVStore, AutoCloseable {
       memTable.remove(key);
     }
   }
+
+  @Override
+  public void compact() throws IOException {
+    wal.rotate();
+  }
 }

@@ -1,0 +1,15 @@
+services:
+  foundry-server:                             # run with 'docker compose up --build'
+    build:
+      context: ..                             # build context is the project root (Dockerfile COPYs from multiple modules)
+      dockerfile: foundry-server/Dockerfile
+    ports:
+      - "7070:7070"                           # host:container — exposes the container port on the host
+    environment:
+      DATA_DIR: /data
+      PORT: 7070
+    volumes:
+      - foundry-data:/data                    # named volume mounted at /data — persists across restarts, survives 'down' but not 'down -v'
+
+volumes:
+  foundry-data:                               # declares the named volume; Docker manages its lifecycle

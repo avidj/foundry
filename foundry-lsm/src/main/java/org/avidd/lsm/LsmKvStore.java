@@ -178,7 +178,8 @@ public class LsmKvStore implements KVStore, Closeable {
     return null;
   }
 
-  private void compact() throws IOException, InterruptedException {
+  @Override
+  public void compact() throws IOException, InterruptedException {
     synchronized ( mutex ) {
       if ( compacting ) {
         return;

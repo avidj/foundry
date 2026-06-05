@@ -1,0 +1,43 @@
+# Fly.io app configuration for foundry-server.
+# Deploy with: flyctl deploy --image ghcr.io/avidj/foundry-server:<sha> --app foundry-server
+# First-time setup: flyctl volumes create, then flyctl secrets set API_KEY=...
+#
+# Generated skeleton: flyctl launch --name foundry-server --region fra --no-deploy
+
+app = 'foundry-server'
+primary_region = 'fra'
+
+[build]
+  dockerfile = 'foundry-server/Dockerfile'  # only used by local 'flyctl deploy'; CI passes --image
+
+[env]
+  PORT = "7070"
+  DATA_DIR = "/data"  # must match mounts.destination below
+
+[http_service]
+  internal_port = 7070  # must match PORT above
+  force_https = true    # Fly terminates TLS; the container sees plain HTTP internally
+  auto_stop_machines = 'stop'   # free-tier machines sleep when idle
+  auto_start_machines = true    # and wake on the next request
+  min_machines_running = 0
+  processes = ['app']
+
+  # Health check — Fly marks the machine healthy before routing traffic to it
+  [[http_service.checks]]
+    grace_period = "10s"  # wait before first check (JVM startup)
+    interval = "15s"
+    method = "GET"
+    path = "/v1/health"
+    timeout = "5s"
+
+# Persistent volume for WAL + Bitcask data files.
+# Create once with: flyctl volumes create foundry_data --size 1 --region fra --app foundry-server
+# Survives deploys and machine restarts; destroyed only with: flyctl volumes destroy
+[mounts]
+  source = "foundry_data"
+  destination = "/data"
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1

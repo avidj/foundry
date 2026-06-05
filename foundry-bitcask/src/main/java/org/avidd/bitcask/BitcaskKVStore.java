@@ -144,7 +144,10 @@ public class BitcaskKVStore implements KVStore {
     }
   }
 
-
+  @Override
+  public void compact() throws IOException {
+    rotate();
+  }
 
   private void rotate() throws IOException {
     synchronized ( mutex ) {
