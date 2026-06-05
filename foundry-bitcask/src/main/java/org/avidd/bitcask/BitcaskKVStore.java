@@ -15,6 +15,12 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * This is another single node KV store.
+ * It works similar to the {@code org.avidd.kvstore.SingleNodeKVStore} but
+ * - uses a BinaryAppendLog
+ * - an index from key to BAL file
+ */
 public class BitcaskKVStore implements KVStore {
   private static final String FILE_EXT = ".bitcask";
   private static final int ROTATION_THRESHOLD = 1024 * 1024 * 64; //64MB

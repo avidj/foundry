@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
@@ -21,7 +22,7 @@ import java.util.Map;
  * @author david
  */
 public class StringWriteAheadLog implements WriteAheadLog {
-  private static final Charset CHARSET = Charset.forName("UTF-8");
+  private static final Charset CHARSET = StandardCharsets.UTF_8;
   private static final DateTimeFormatter DATE_FORMAT =
     DateTimeFormatter.ofPattern("dd-MM-yyyy_HH-mm-ss-SSS");
   static final String LOG_SUFFIX = ".wal.log";
@@ -33,13 +34,11 @@ public class StringWriteAheadLog implements WriteAheadLog {
   private FileChannel channel;
   private boolean recovered = false;
   private String currentLogFile;
-  private final long maxLogSizeBytes;
   private final Object mutex = new Object();
   private boolean rotating = false;
 
-  public StringWriteAheadLog(String walDir, long maxLogSizeBytes) {
+  public StringWriteAheadLog(String walDir) {
     this.walDir = walDir;
-    this.maxLogSizeBytes = maxLogSizeBytes;
   }
 
   @Override

@@ -13,6 +13,7 @@
         <module>foundry-bitcask</module>
         <module>foundry-lsm</module>
         <module>foundry-streaming</module>
+        <module>foundry-server</module>
     </modules>
 
     <properties>
