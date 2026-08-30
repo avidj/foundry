@@ -17,8 +17,7 @@ competitive with a tuned production engine. Foundry is not a database and is not
 to become one.
 
 72 tests drive recovery and compaction explicitly: partial-frame replay, tombstone
-survival through compaction, concurrent flush interleavings. Design notes are in
-[`docs/specs/`](docs/specs).
+survival through compaction, concurrent flush interleavings. 
 
 ## Modules
 
