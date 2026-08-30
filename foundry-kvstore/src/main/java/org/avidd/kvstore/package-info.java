@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /*
  * This package implements a real durable, lossless, single-node, Bitcask-style KV-store.
  *

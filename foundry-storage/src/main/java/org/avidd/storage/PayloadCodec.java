@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package org.avidd.storage;
 
 import java.io.IOException;

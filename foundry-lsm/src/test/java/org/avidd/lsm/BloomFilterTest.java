@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package org.avidd.lsm;
 
 import static org.avidd.lsm.SSTable.FALSE_POSITIVE_RATE;

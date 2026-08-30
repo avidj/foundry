@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Record MemtableOp: binary WAL entries
  * class MemtableCodec implements PayloadCodec<MemtableOp>
