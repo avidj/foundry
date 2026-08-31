@@ -6,10 +6,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Map;
 
-/**
- *
- * @author david
- */
 public interface WriteAheadLog extends Closeable {
 
   public void append(String key, String value) throws IOException ;

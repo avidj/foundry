@@ -17,7 +17,6 @@ import org.avidd.foundry.storage.WriteAheadLog;
  * Deletions are tombstoned.
  * On recovery / restart: replay the latest snapshot and the latest WAL
  * On write: append, fsync (inside the WAL), mutate memtable
- * @author david
  */
 public class SingleNodeKVStore implements KVStore, AutoCloseable {
   public static final long MB = 1024 * 1024;

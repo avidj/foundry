@@ -22,10 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-/**
- *
- * @author david
- */
 public abstract class WriteAheadLogTest {
   static final Path TMP_DIR = Paths.get(System.getProperty("java.io.tmpdir"));
   static final File WAL_DIR = new File(TMP_DIR.toFile(), "wal");

@@ -19,10 +19,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- *
- * @author david
- */
 public class StringWriteAheadLog implements WriteAheadLog {
   private static final Charset CHARSET = StandardCharsets.UTF_8;
   private static final DateTimeFormatter DATE_FORMAT =

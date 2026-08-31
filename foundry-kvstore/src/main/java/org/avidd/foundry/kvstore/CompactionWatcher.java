@@ -11,10 +11,6 @@ import org.avidd.foundry.storage.WriteAheadLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- *
- * @author david
- */
 public class CompactionWatcher implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(CompactionWatcher.class);
   private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
