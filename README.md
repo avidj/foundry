@@ -16,8 +16,9 @@ sparse indexes, flush/compaction concurrency.
 competitive with a tuned production engine. Foundry is not a database and is not trying
 to become one.
 
-72 tests drive recovery and compaction explicitly: partial-frame replay, tombstone
-survival through compaction, concurrent flush interleavings. 
+81 tests drive recovery, compaction and API auth explicitly: partial-frame replay,
+tombstone survival through compaction, concurrent flush interleavings, and fail-closed
+startup when no API key is configured.
 
 ## Modules
 

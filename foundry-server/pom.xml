@@ -73,7 +73,7 @@
                         <manifest>
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>libs/</classpathPrefix>
-                            <mainClass>org.avidd.server.Main</mainClass>
+                            <mainClass>org.avidd.foundry.server.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
